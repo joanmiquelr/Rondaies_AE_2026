@@ -1,0 +1,157 @@
+---
+title: "Corpus de rondalles mallorquines (Aplec) — dossier de enlaces y justificación de dominio público"
+author: "Ricardo Alberich Martí"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+  pdf_document:
+    toc: true
+    number_sections: true
+---
+
+> **Propósito.** Este documento recopila los tomos del *Aplec de Rondaies Mallorquines d’en Jordi des Racó* localizados en **Wikimedia Commons**, con **enlaces verificables** y una **justificación jurídica** de que las ediciones usadas son de **dominio público**. Además, incluye código R para descargar los PDF al disco y dejar constancia de las citas/URIs.
+
+# 1. Enlaces verificados (Wikimedia Commons)
+
+Cada elemento de la lista incluye: **título exacto del fichero en Commons**, **año de edición** y **URL**. Todos los registros de Commons citados muestran la marca **Public Domain Mark 1.0** y el texto: *"This work is in the public domain... free of known restrictions under copyright law"*.
+
+- **Tom I (1915)** — *Aplec de rondaies mallorquines d’en Jordi des Recó — Tom I (1915)*  
+  URL: <https://commons.wikimedia.org/wiki/File:Aplec_de_rondaies_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_I_(1915).pdf>
+
+- **Tom I (1896)** — *Aplech de rondayes mallorquines d’en Jordi des Recó — Tom I (1896)*  
+  URL: <https://commons.wikimedia.org/wiki/File:Aplech_de_rondayes_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_I_(1896).pdf>
+
+- **Tom II (1913)** — *Aplec de rondaies mallorquines d’en Jordi des Recó — Tom II (1913)*  
+  URL: <https://commons.wikimedia.org/wiki/File:Aplec_de_rondaies_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_II_(1913).pdf>
+
+- **Tom II (1925)** — *Aplech de rondayes mallorquines d’en Jordi des Recó — Tom II (1925)*  
+  URL: <https://commons.wikimedia.org/wiki/File:Aplech_de_rondayes_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_II_(1925).pdf>
+
+- **Tom III (1913)** — *Aplec de rondaies mallorquines d’en Jordi des Recó — Tom III (1913)*  
+  URL: <https://commons.wikimedia.org/wiki/File:Aplec_de_rondaies_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_III_(1913).pdf>
+
+- **Tom V (1924)** — *Aplech de rondayes mallorquines d’en Jordi des Recó — Tom V (1924)*  
+  URL: <https://commons.wikimedia.org/wiki/File:Aplech_de_rondayes_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_V_(1924).pdf>
+
+- **Tom VIII (1924)** — *Aplech de rondayes mallorquines d’en Jordi des Recó — Tom VIII (1924)*  
+  URL: <https://commons.wikimedia.org/wiki/File:Aplech_de_rondayes_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_VIII_(1924).pdf>
+
+
+# 2. Justificación de dominio público
+
+## 2.1. Aviso explícito en Wikimedia Commons
+
+En cada una de las páginas anteriores, Wikimedia Commons incluye el aviso (traducción libre):
+
+> *This work is in the public domain in its country of origin and other countries and areas where the copyright term is the author's life plus 100 years or fewer. This file has been identified as being free of known restrictions under copyright law, including all related and neighboring rights. Public Domain Mark 1.0.*
+
+Para consulta directa, revise por ejemplo los apartados **Permission (Reusing this file)** de:
+
+- Tom I (1915): ver la sección de permisos en la URL incluida arriba.
+- Tom II (1913): idem.
+- Tom I (1896) / Tom V (1924) / Tom VIII (1924): idem.
+
+## 2.2. Argumento jurídico (España + cronología)
+
+- Autor: **Antoni Maria Alcover** (pseudónimo *Jordi des Racó*), fallecido en **1932**.  
+- En España, las obras pasan a **dominio público** a los **70 años post mortem auctoris**.  
+- Las ediciones usadas fueron **publicadas entre 1896 y 1925**, mucho antes del límite y, por tanto, **en dominio público** a día de hoy.
+
+> **Nota**: además, los ficheros citados en Commons se publicaron **antes de 1930**, por lo que también están en dominio público en EE. UU., lo que refuerza su reutilización académica y técnica internacional.
+
+## 2.3. Cómo dejar constancia en tu repositorio (README)
+
+En tu GitHub, añade un bloque como este a `README.md`:
+
+```markdown
+### Fuentes y dominio público
+Este corpus se ha construido a partir de ediciones **en dominio público** del *Aplec de Rondaies Mallorquines d’en Jordi des Racó*, disponibles en **Wikimedia Commons**. Cada ficha de archivo indica explícitamente:
+
+> "This work is in the public domain … free of known restrictions … Public Domain Mark 1.0".
+
+Ejemplos de referencia:
+- Tom I (1915): https://commons.wikimedia.org/wiki/File:Aplec_de_rondaies_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_I_(1915).pdf
+- Tom II (1913): https://commons.wikimedia.org/wiki/File:Aplec_de_rondaies_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_II_(1913).pdf
+
+Autor: Antoni Maria Alcover (†1932). En España, dominio público a los 70 años de la muerte del autor.
+```
+
+# 3. Descarga automatizada de los PDF (R)
+
+> **Requisitos**: conexión a internet y permisos de escritura en la carpeta de trabajo.
+
+```{r setup, message=FALSE}
+urls <- c(
+  "https://commons.wikimedia.org/wiki/Special:FilePath/Aplec_de_rondaies_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_I_(1915).pdf",
+  "https://commons.wikimedia.org/wiki/Special:FilePath/Aplech_de_rondayes_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_I_(1896).pdf",
+  "https://commons.wikimedia.org/wiki/Special:FilePath/Aplec_de_rondaies_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_II_(1913).pdf",
+  "https://commons.wikimedia.org/wiki/Special:FilePath/Aplech_de_rondayes_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_II_(1925).pdf",
+  "https://commons.wikimedia.org/wiki/Special:FilePath/Aplec_de_rondaies_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_III_(1913).pdf",
+  "https://commons.wikimedia.org/wiki/Special:FilePath/Aplech_de_rondayes_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_V_(1924).pdf",
+  "https://commons.wikimedia.org/wiki/Special:FilePath/Aplech_de_rondayes_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_VIII_(1924).pdf"
+)
+
+# Carpeta destino
+out_dir <- "./pdf_aplec"
+if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+
+# Descarga robusta
+fn <- function(u){
+  dest <- file.path(out_dir, basename(u))
+  try(utils::download.file(u, destfile = dest, mode = "wb", quiet = TRUE))
+  dest
+}
+
+local_files <- vapply(urls, fn, character(1))
+local_files
+```
+
+> **Nota:** uso `Special:FilePath` para obtener directamente el binario del PDF desde Commons.
+
+# 4. (Opcional) Extracción de texto para preprocesado
+
+Si los PDFs son imagen, necesitarás **OCR**. Para una primera pasada, puedes probar `pdftools`; si el texto no se extrae, usa Tesseract (OCR).
+
+```{r ocr, eval=FALSE}
+# install.packages(c("pdftools", "tesseract"))
+library(pdftools)
+# Texto rápido (si el PDF contiene texto embebido)
+textos <- lapply(local_files, pdftools::pdf_text)
+
+# Si devuelve cadenas vacías, usar OCR con tesseract::ocr()
+# library(tesseract)
+# textos_ocr <- lapply(local_files, function(f) tesseract::ocr(f, engine = tesseract("cat")))
+```
+
+# 5. Referencias y capturas de evidencia
+
+- **Wikimedia Commons — Tom I (1915)**: ficha y permisos *Public Domain Mark 1.0*.  
+  <https://commons.wikimedia.org/wiki/File:Aplec_de_rondaies_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_I_(1915).pdf>
+
+- **Wikimedia Commons — Tom II (1913)**: ficha y permisos *Public Domain Mark 1.0*.  
+  <https://commons.wikimedia.org/wiki/File:Aplec_de_rondaies_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_II_(1913).pdf>
+
+- **Wikimedia Commons — Tom I (1896)**: ficha y permisos *Public Domain Mark 1.0*.  
+  <https://commons.wikimedia.org/wiki/File:Aplech_de_rondayes_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_I_(1896).pdf>
+
+- **Wikimedia Commons — Tom V (1924)**: ficha y permisos *Public Domain Mark 1.0*.  
+  <https://commons.wikimedia.org/wiki/File:Aplech_de_rondayes_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_V_(1924).pdf>
+
+- **Wikimedia Commons — Tom VIII (1924)**: ficha y permisos *Public Domain Mark 1.0*.  
+  <https://commons.wikimedia.org/wiki/File:Aplech_de_rondayes_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_VIII_(1924).pdf>
+
+- **Wikimedia Commons — Tom III (1913)**: ficha y permisos *Public Domain Mark 1.0*.  
+  <https://commons.wikimedia.org/wiki/File:Aplec_de_rondaies_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_III_(1913).pdf>
+
+- **Wikimedia Commons — Tom II (1925)**: ficha y permisos *Public Domain Mark 1.0*.  
+  <https://commons.wikimedia.org/wiki/File:Aplech_de_rondayes_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_II_(1925).pdf>
+
+> **Sugerencia de evidencia**: guarda una captura de pantalla de la sección **Permission (Reusing this file)** de cada ficha y archívala en `./evidencias/` junto con este Rmd.
+
+---
+
+**Contacto:** ricardo.alberich@uib.es  
+**Nota legal:** este dossier solo referencia ediciones con marca *Public Domain Mark 1.0* en Wikimedia Commons.
