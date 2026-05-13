@@ -1,0 +1,47 @@
+---
+title: "LecturaTomoII"
+author: "Joan Miquel Rubí Garcías"
+date: "2026-05-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(pdftools)
+```
+
+```{r}
+libro = pdf_text("C://Rondalles_AE_2026//pdf_aplec//Aplec_de_rondaies_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_II_(1913).pdf")
+indice = libro[5]
+indice
+```
+
+```{r}
+# Cargar la librería dplyr para manipulación de datos
+library(dplyr)
+
+# Crear los datos en forma de dataframe
+datos <- data.frame(
+  Título = c("GUARDAUVOS DE PEDRA REDONA, DE CAQUI NO LLADRA I D'HOMO ROIG",
+             "EN PERE DE SA COCA", 
+             "ES PORT DE SA CIBOLLA BLANCA", 
+             "EN PERE POCA POR.",
+             "ES SOLDADET DE SA MOTXILLA",
+             "LA POMARRINA", 
+             "EN PERE TORT",
+             "SA FIA DEL SOL I DE LA LLUNA",
+             "L'AMO DESO-NA-MOIXA",
+             "LA PRINCESA BELLA",
+             "ES FII DES PESCADOR",
+             "LA FLOR ROMANIAL", 
+             "EN GOSTÍ LLADRE", 
+             "TRES GERMANS DESXONDITS", 
+             "SA COMTESSA SENSA BRAÇOS", 
+             "ES POAL FLORIT", 
+             "ES REIM DEL REI-MORO AMB SET PAMS DE MORRO"),
+  Página = c(1, 49, 59, 77, 97, 109, 117, 140, 166, 174, 198, 229, 241, 263, 270, 284, 288)
+)
+
+# Mostrar la tabla
+print(datos)
+```
+
