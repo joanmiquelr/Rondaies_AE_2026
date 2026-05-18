@@ -18,6 +18,28 @@ Cada grupo coge un aplec y lo procesa
 
 ##  Solución
 
+```{r}
+tomo2 = read_csv("C://Rondaies_AE_2026//raw_text//rondalles_ocr_tomo2.txt")
+tabla = read_csv("C://Rondaies_AE_2026//raw_text//Tabla_tomo2.csv")
+indice = 
+corpus_tomo1 <- tabla %>%
+  mutate(
+    texto = map2_chr(
+      indice,
+      lead(indice, default = nrow(tomo2) + 1),
+      ~ {
+        start <- .x
+        end <- .y - 1
+        page_texts <- tomo1 %>%
+          filter(pagina >= start, pagina < end) %>%
+          pull(texto)
+        paste(page_texts, collapse = "\n")
+      }
+    )
+  ) %>%
+  select(linea, pagina, titulo, texto)
+```
+
 ### Tokenización y limpieza
 
  Cargamos los datos y los preprocesamos con el siguiente código:
@@ -26,16 +48,24 @@ Cada grupo coge un aplec y lo procesa
 library(tidyverse)
 library(stringr)
 
-lista_tomos=dir("raw_text", pattern = "rondalles_ocr_tomo.*\\.csv")
+lista_tomos=dir("raw_text", pattern = "rondalles_ocr_tomo2.*\\.csv")
 path_lista_tomos=paste0("raw_text/",lista_tomos)
 path_lista_tomos
 
-corpus <- sapply(path_lista_tomos,function(x){ read_csv(x) %>% mutate(
-    texto = str_replace_all(texto, c(
-    "RONDATES" = "RONDALLES",
-      "MAYORQUINES" = "MALLORQUINES"
-    )),
-    texto = str_replace_all(texto, "(\\p{L}+)-\\s*\\n\\s*(\\p{L}+)", "\\1\\2"))}) 
-```
- 
+corpus <- map_dfr(path_lista_tomos, function(x) {
+  read_csv(x, show_col_types = FALSE) %>% 
+    mutate(
+      texto = str_replace_all(texto, c(
+        "RONDATES" = "RONDALLES",
+        "MAYORQUINES" = "MALLORQUINES"
+      )),
+      texto = str_replace_all(
+        texto,
+        "(\\p{L}+)-\\s*\\n\\s*(\\p{L}+)",
+        "\\1\\2"
+      )
+    )
+})
 
+corpus
+```
