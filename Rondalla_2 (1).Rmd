@@ -1,0 +1,185 @@
+---
+title: "Rondalla_2"
+output: html_document
+date: "2026-05-13"
+---
+
+---
+title: "Lectura PDF"
+output: html_document
+---
+
+```{r}
+# Librerías necesarias
+library(pdftools)
+library(tidyverse)
+library(tidytext)
+library(topicmodels)
+library(word2vec)
+library(uwot)
+library(igraph)
+library(ggraph)
+library(widyr)
+
+# 1. Cargar el PDF
+texto_raw <- pdf_text("pdf_aplec/Aplec_de_rondaies_mallorquines_d%27en_Jordi_des_Rec%C3%B3_-_Tom_II_(1913).pdf")
+
+# 2. Estructurar en Data Frame y limpiar
+tomo2 <- tibble(
+  pagina = seq_along(texto_raw),
+  texto = texto_raw
+) %>%
+  mutate(
+    texto = str_replace_all(texto, "(\\p{L}+)-\\s*\\n\\s*(\\p{L}+)", "\\1\\2"),
+    texto = str_replace_all(texto, "—\\s*[eij]+\\s*", "— "),
+    texto = str_replace_all(texto, "(\\p{L}+)2", "\\1?"),
+    texto = str_replace_all(texto, "\\b\\d+\\b", ""),
+    texto = str_remove_all(texto, "[:punct:]"),
+    texto = str_squish(str_to_lower(texto))
+  )
+
+# 3. Diccionario de stopwords manual (ampliar según necesidad)
+stopwords_mallorqui <- tibble(
+  word = c("es", "sa", "ses", "ets", "s", "d", "l", "m", "t", "n", "i", "a", "o", "u", 
+           "en", "na", "de", "que", "un", "una", "amb", "per", "com", "no", "si", 
+           "el", "la", "els", "les", "des", "pes", "mos", "vos", "se", "va", "fer")
+)
+
+# 4. Tokenización
+tokens_tomo2 <- tomo2 %>%
+  unnest_tokens(word, texto) %>%
+  anti_join(stopwords_mallorqui, by = "word") %>%
+  filter(str_length(word) > 2) # Filtrar palabras muy cortas
+```
+
+
+```{r}
+# Frecuencia de palabras
+frecuencias <- tokens_tomo2 %>%
+  count(word, sort = TRUE)
+
+# Visualización de las 20 más frecuentes
+frecuencias %>%
+  head(20) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word)) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Palabras más frecuentes en el Tomo II", x = "Frecuencia", y = NULL) +
+  theme_minimal()
+
+# Ley de Zipf
+zipf_data <- frecuencias %>%
+  mutate(
+    rank = row_number(),
+    term_frequency = n / sum(n)
+  )
+
+zipf_data %>%
+  ggplot(aes(rank, term_frequency)) +
+  geom_line(linewidth = 1, color = "darkred", alpha = 0.8) +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(title = "Ley de Zipf (Escala Logarítmica)", x = "Rango", y = "Frecuencia del término") +
+  theme_minimal()
+```
+```{r}
+# Cálculo de TF-IDF por página
+tfidf_tomo2 <- tokens_tomo2 %>%
+  count(pagina, word, sort = TRUE) %>%
+  bind_tf_idf(word, pagina, n) %>%
+  arrange(desc(tf_idf))
+
+# Ver los términos más exclusivos
+head(tfidf_tomo2, 15)
+```
+```{r}
+# Crear matriz Documento-Término (DTM)
+dtm_tomo2 <- tokens_tomo2 %>%
+  count(pagina, word) %>%
+  cast_dtm(pagina, word, n)
+
+# Entrenar el modelo LDA con 4 tópicos (puedes cambiar la k)
+lda_modelo <- LDA(dtm_tomo2, k = 4, control = list(seed = 1234))
+
+# Extraer las palabras principales de cada tópico
+topicos <- tidy(lda_modelo, matrix = "beta")
+
+topicos_top <- topicos %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+# Visualizar tópicos
+topicos_top %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  scale_y_reordered() +
+  labs(title = "Tópicos detectados por LDA en el Tomo II", x = "Beta", y = NULL) +
+  theme_minimal()
+```
+
+```{r}
+# Preparar texto en listas de frases limpias
+textos_w2v <- tomo2 %>%
+  pull(texto) %>%
+  str_replace_all("[^[:alpha:]]", " ") %>%
+  str_squish()
+
+# Entrenar modelo Word2Vec
+modelo_w2v <- word2vec(x = textos_w2v, type = "cbow", dim = 50, iter = 20)
+
+# Extraer embeddings de las palabras del vocabulario
+embeddings <- as.matrix(modelo_w2v)
+
+# Proyectar con UMAP (Reducción de dimensionalidad)
+set.seed(42)
+umap_coords <- umap(embeddings, n_neighbors = 15, min_dist = 0.1)
+
+df_umap <- tibble(
+  word = rownames(embeddings),
+  x = umap_coords[, 1],
+  y = umap_coords[, 2]
+) %>%
+  inner_join(frecuencias, by = "word") %>%
+  filter(n > 10) # Mostrar solo palabras recurrentes para no saturar el gráfico
+
+# Visualizar el espacio semántico
+ggplot(df_umap, aes(x, y, label = word, size = n)) +
+  geom_text(alpha = 0.7, check_overlap = TRUE) +
+  theme_void() +
+  labs(title = "Proyección Semántica UMAP de las Rondallas")
+```
+
+```{r}
+# Pares de palabras que aparecen en las mismas páginas
+word_pairs <- tokens_tomo2 %>%
+  pairwise_count(word, pagina, sort = TRUE)
+
+# Podar el grafo (quedarnos con correlaciones/coocurrencias fuertes)
+umbral <- 15 # Ajusta este número según el tamaño de tus datos
+word_network <- word_pairs %>%
+  filter(n >= umbral) %>%
+  graph_from_data_frame(directed = FALSE)
+
+# Calcular centralidad y comunidades (Algoritmo Louvain)
+V(word_network)$degree <- degree(word_network)
+V(word_network)$community <- as.character(membership(cluster_louvain(word_network)))
+
+# Visualizar el Grafo
+set.seed(123)
+ggraph(word_network, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE, color = "gray80") +
+  geom_node_point(aes(size = degree, color = community), show.legend = FALSE) +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1, size = 4, check_overlap = TRUE) +
+  theme_void() +
+  labs(title = "Grafo de Concurrencia de Palabras")
+```
+
+4. Comparacion con otro tomo (tomo 1)
+
+
+
+
