@@ -1,0 +1,41 @@
+# Práctica evaluable por grupos
+
+**Enunciado provisional**
+
+El texto ya lo he procesado en este github y he generado un quarto book (ya lo explicaré)
+
+Cada grupo coge un aplec y lo procesa
+
+1.  Cargar el texto y preprocesarlo (tokenización, limpieza, etc.)
+2.  Analizar la frecuencia de palabras en el aplec.
+3.  Estudiar la ley de Zipf en el aplec.
+4.  Comparar los resultados con otros aplecs o con el texto completo.
+5.  Construir un corpus formado por las rondallas y cacular el tf-idf y 7. Estudiar las palabras más características de las rondallas
+6.  Hacer un tópico de LDA sobre el corpus de rondallas y estudiar los temas más relevantes.
+7.  Estudiar el paquete word2vec y proyectar las palabra de la las rondallas en $\mathbb{R}^n$ y luego proyectar con algunos de los algoritmos t-SNE o UMAP o MDS algún conjunto de palabras.
+8.  Calcular la matriz de distancias de las palabras y construir un grafo podando el grafo completo con un umbral de similitud. Estudiar la comunidad de palabras y las palabras más centrales en el grafo.
+9.  Presentar los resultados en un informe o presentación.
+
+##  Solución
+
+### Tokenización y limpieza
+
+ Cargamos los datos y los preprocesamos con el siguiente código:
+ 
+```{r}
+library(tidyverse)
+library(stringr)
+
+lista_tomos=dir("raw_text", pattern = "rondalles_ocr_tomo.*\\.csv")
+path_lista_tomos=paste0("raw_text/",lista_tomos)
+path_lista_tomos
+
+corpus <- sapply(path_lista_tomos,function(x){ read_csv(x) %>% mutate(
+    texto = str_replace_all(texto, c(
+    "RONDATES" = "RONDALLES",
+      "MAYORQUINES" = "MALLORQUINES"
+    )),
+    texto = str_replace_all(texto, "(\\p{L}+)-\\s*\\n\\s*(\\p{L}+)", "\\1\\2"))}) 
+```
+ 
+
