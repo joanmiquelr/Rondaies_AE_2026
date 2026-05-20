@@ -1,0 +1,189 @@
+# Solución práctica
+
+## Carga de datos
+
+```{r}
+library(tidyverse)
+```
+
+Cargaremos cada todo de uno en un primer paso para luego construir el corpus completo. En este caso, el proceso de construcción del corpus es un poco más laborioso, ya que cada rondalla se encuentra distribuida a lo largo de varias páginas y no tenemos un formato estructurado que nos permita identificar fácilmente los límites de cada rondalla. Por ello, utilizaremos la tabla de contenidos (que se encuentra en un formato estructurado) para identificar los límites de cada rondalla y luego extraer el texto correspondiente a cada una de ellas.
+
+## Tomo 1
+
+
+Para el tomo 1 lo ficheros
+
+```{r}
+dir("raw_text", pattern = "tomo1")
+```
+Leeremos el que tienen la información de cada página y el índice de contenidos y el número de página real en el documento, que NO se corresponde con la numeración del tomo. Algunos (o todos los tomos) incorporan: la portada (pág 1),  y los preambulos  numerados en núemeros romanos  que aveces incluyen un índice al que llaman tabla  al principio (en el tomo VIII está al final). Para facilitar esto  tenemos el fichero de la TABLA para arreglar, ver el ejemplo del tomo I, como apilar cada rondalla  para una entrada del corpus.
+
+
+
+```{r}
+#página por linea
+tomo1 <- read_csv("raw_text/rondalles_ocr_tomo1.csv")
+# indice
+tabla1 <- read_csv("raw_text/tabla_tomo1.csv")
+```
+
+```{r}
+t2=tabla1[-c(1:3),]
+t2$final=c(t2$indice[-1]-1,300)
+knitr::kable(t2)
+```
+
+```{r}
+titulo=t2$titulo
+length(titulo)
+
+extrae <- function(i) {
+  tomo1 %>%
+    filter(pagina >= t2$indice[i] & pagina <= t2$final[i]) %>%
+    pull(texto) %>%
+    paste(collapse = "\n")}
+
+sapply(1:length(titulo), extrae)-> rondallas
+corpus1=tibble(titulo,rondallas)
+corpus1
+```
+
+
+
+## Tomo 2 
+
+Empezaremos por el tomo 1913, que es el que tiene un formato más parecido al tomo 1, con una tabla de contenidos al principio. El proceso de extracción del texto será similar al del tomo 1, utilizando la tabla de contenidos para identificar los límites de cada rondalla y luego extraer el texto correspondiente a cada una de ellas.
+
+
+```{r}
+tomo2 <- read_csv("raw_text/rondalles_ocr_tomo2.csv")
+n=dim(tomo2)[1]
+n
+# empieza la primera dondalla en la página 8
+tomo2=tomo2[-c(1:7),]
+tabla2 <- read_csv("raw_text/tabla_tomo2.csv")
+tabla2$final=c(tabla2$pagina[-1]-1,n)
+knitr::kable(tabla2)
+titulo=tabla2$Título
+titulo
+```
+Agrupemos cada rondalla en una entrada del corpus, utilizando la tabla de contenidos para identificar los límites de cada rondalla y luego extraer el texto correspondiente a cada una de ellas.
+
+
+```{r}
+extrae <- function(i) {
+  tomo2 %>%
+    filter(pagina >= t2$indice[i] & pagina <= t2$final[i]) %>%
+    pull(texto) %>%
+    paste(collapse = "\n")}
+
+sapply(1:length(titulo), extrae)-> rondallas
+corpus2=tibble(titulo,rondallas)
+corpus2
+```
+
+Sería conveniente añadirle una columna indicando el número de aplec....:-)
+
+
+
+## Tomo 3
+
+
+Cargo el tomo 3 y su tabla de contenidos
+
+```{r}
+tomo3=read_csv("raw_text/rondalles_ocr_tomo3.csv")
+tabla3=read_csv("raw_text/tabla_tomo3.csv")
+tabla3$indice=tabla3$pagina+10
+n=dim(tomo3)[1]
+n
+tabla3$final=c(tabla3$indice[-1]-1,n)
+```
+Veamos el contenido de la tabla de contenidos
+
+```{r}
+knitr::kable(tabla3)
+```
+
+Ahora genero el corpus3
+
+
+```{r}
+extrae <- function(i) {
+  tomo3 %>%
+    filter(pagina >= t2$indice[i] & pagina <= t2$final[i]) %>%
+    pull(texto) %>%
+    paste(collapse = "\n")}
+
+corpus3 <- tibble(titulo=tabla3$titulo,rondallas=sapply(1:dim(tabla3)[1], extrae))
+
+```
+
+
+## Tomo V
+
+Lectura especial tomo V, que tiene un formato diferente al resto de tomos, ya que no tiene una tabla de contenidos al principio, sino que la tabla de contenidos se encuentra al final del tomo. Por ello, primero leeremos el texto completo del tomo y luego utilizaremos la tabla de contenidos para identificar los límites de cada rondalla y luego extraer el texto correspondiente a cada una de ellas.
+
+
+
+
+Lectura tomo V y su tabla de contenidos
+
+```{r}
+# tomo5=read_csv("raw_text/rondalles_ocr_tomo5.csv")
+# tabla5=read_csv("raw_text/tabla_tomo5.csv")
+```
+
+
+
+
+## Tomo VIII
+
+Lectura especial tomo VIII, que tiene un formato diferente al resto de tomos, ya que no tiene una tabla de contenidos al principio, sino que la tabla de contenidos se encuentra al final del tomo. Por ello, primero leeremos el texto completo del tomo y luego utilizaremos la tabla de contenidos para identificar los límites de cada rondalla y luego extraer el texto correspondiente a cada una de ellas.
+
+Lectura tomo VIII y su tabla de contenidos
+
+La tabla de  contenidos es
+
+```{r}
+tomo8=read_csv("raw_text/tabla_tomo8.csv")
+n=dim(tomo8)[1]
+
+titulo=c("Sa llampria Meravillosa",
+         "En' Pere Catorze",
+         "La Mare Baleueta",
+         "Es Mel.loro Rosso")
+pagina=c(1, 54, 75,119)
+indice=pagina+6
+final=c(indice[-1]-1,n)
+tibble(titulo,pagina,indice,final)
+#write_csv(tibble(titulo,pagina,indice,final),"raw_text/tabla_tomo8.csv")
+```
+
+Lectura del tomo VIII y su tabla de contenidos
+
+```{r}
+tomo8=read_csv("raw_text/rondalles_ocr_tomo8.csv")
+tabla8=read_csv("raw_text/tabla_tomo8.csv")
+n=dim(tomo8)[1]
+tabla8$final=c(tabla8$indice[-1]-1,n)
+```
+
+
+Veamos el contenido de la tabla de contenidos
+
+```{r}
+knitr::kable(tabla8)
+```
+
+Ahora genero el corpus8
+
+```{r}
+extrae <- function(i) {
+  tomo8 %>% 
+    filter(pagina >= t2$indice[i] & pagina <= t2$final[i]) %>%
+    pull(texto) %>%
+    paste(collapse = "\n")}
+corpus8 <- tibble(titulo=tabla8$titulo,rondallas=sapply(1:dim(tabla8)[1], extrae))
+```
+
