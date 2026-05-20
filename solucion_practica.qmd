@@ -4,6 +4,14 @@
 
 ```{r}
 library(tidyverse)
+library(stringr)
+library(tidytext)
+library(topicmodels)
+library(word2vec)
+library(proxy)
+library(Rtsne)
+library(igraph)
+library(ggraph)
 ```
 
 ## Tomo 2 
@@ -21,8 +29,7 @@ tabla2 <- read_csv("raw_text/tabla_tomo2.csv")
 colnames(tabla2) = c("titulo", "pagina", "final")
 tabla2$final=c(tabla2$pagina[-1]-1,n)
 knitr::kable(tabla2)
-titulo=tabla2$Título
-titulo
+titulo=tabla2$titulo
 ```
 Agrupemos cada rondalla en una entrada del corpus, utilizando la tabla de contenidos para identificar los límites de cada rondalla y luego extraer el texto correspondiente a cada una de ellas.
 
@@ -39,6 +46,148 @@ corpus2=tibble(titulo,rondallas)
 corpus2
 ```
 
-Sería conveniente añadirle una columna indicando el número de aplec....:-)
+### Pregunta 1
 
+```{r}
+tokens2 <- corpus2 %>%
+  unnest_tokens(
+    output = paraula,
+    input = rondallas
+  ) %>%
+  mutate(
+    paraula = str_to_lower(paraula),
+    paraula = str_replace_all(paraula, "[^[:alpha:]àèéíïòóúüç·-]", "")
+  ) %>%
+  filter(
+    paraula != "",
+    str_length(paraula) > 2
+  )
+
+tokens2
+
+stopwords_mallorqui <- tibble(
+  paraula = c(
+    "es", "sa", "ses", "ets", "que",  "una",
+    "amb", "per", "com", "no", "si", "el", "la", "els", "les",
+    "des", "pes", "mos", "vos", "se", "va", "fer", "més",
+    "qui", "cap", "ell", "tot", "los", "havia", "ben", "tan",
+    "era", "esser", "haver", "aont", "això", "aquell",
+    "aquella", "tots", "tota", "altre", "altra", "ehi", "hi",
+    "però", "perque", "quan", "dins", "també", "així",
+    "digué", "diu", "llavò", "ara", "aquesta", "aquest",
+    "després", "ja", "pero"
+  )
+)
+
+tokens2_net <- tokens2 %>%
+  anti_join(stopwords_mallorqui, by = "paraula")
+
+tokens2_net
+```
+
+### Pregunta 2
+
+```{r}
+freq_global <- tokens2_net %>%
+  count(paraula, sort = TRUE)
+
+freq_global
+
+freq_global %>%
+  slice_max(n, n = 15) %>%
+  ggplot(aes(x = reorder(paraula, n), y = n)) +
+  geom_col() +
+  geom_col(fill = "blue")+
+  coord_flip() +
+  labs(
+    title = "Palabras más frecuentes en el aplec",
+    x = "Palabra",
+    y = "Frecuencia"
+  )
+```
+### Pregunta 3
+
+```{r}
+zipf <- freq_global %>%
+  mutate(rango = row_number(), tf = n/sum(n))
+
+zipf %>%
+  ggplot(aes(x = rango, y = tf)) +
+  geom_line(color = "blue", linewidth = 1) +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(
+    title = "Ley de Zipf en las rondallas",
+    x = "Rango (log)",
+    y = "Frecuencia (log)"
+  )+ 
+  theme_minimal()
+```
+
+# Por rondalla
+
+```{r}
+freq_rondalla <- tokens2_net %>%
+  count(titulo, paraula, sort = TRUE)
+
+zipf_rondalla <- freq_rondalla %>%
+  group_by(titulo) %>%
+  arrange(desc(n), .by_group = TRUE) %>%
+  mutate(rango = row_number()) %>%
+  ungroup() # %>% filter(rango<980, rango>20)
+
+
+
+zipf_rondalla %>%
+  ggplot(aes(x = rango, y = n/sum(n), color = titulo)) +
+  geom_line() +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(
+    title = "Ley de Zipf por rondalla",
+    x = "Rango (log)",
+    y = "Frecuencia (log)"
+  ) +
+  
+  theme(legend.position = "none")
+```
+### Pregunta 5
+
+```{r}
+tfidf <- tokens2_net %>%
+  count(titulo, paraula) %>%
+  bind_tf_idf(paraula, titulo, n)
+
+tfidf
+
+top_tfidf <- tfidf %>%
+  group_by(titulo) %>%
+  slice_max(tf_idf, n = 10) %>%
+  ungroup()
+
+top_tfidf
+
+top_tfidf %>%
+  ggplot(aes(x = reorder_within(paraula, tf_idf, titulo), y = tf_idf)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  facet_wrap(~ titulo, scales = "free") +
+  scale_x_reordered() +
+  labs(
+    title = "Palabras más características por rondalla (TF-IDF)",
+    x = "Palabra",
+    y = "TF-IDF"
+  )
+
+tfidf %>%
+  slice_max(tf_idf, n = 20) %>%
+  ggplot(aes(x = reorder(paraula, tf_idf), y = tf_idf)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(
+    title = "Palabras más características del corpus (TF-IDF)",
+    x = "Palabra",
+    y = "TF-IDF"
+  )
+```
 
