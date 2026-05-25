@@ -1,0 +1,464 @@
+---
+title: "Práctica_Ricardo"
+output:
+  html_document: default
+  pdf_document: default
+date: "2026-05-21"
+---
+# Solución práctica
+
+### Pregunta 1
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(stringr)
+library(tidytext)
+library(topicmodels)
+library(word2vec)
+library(proxy)
+library(Rtsne)
+library(igraph)
+library(ggraph)
+```
+
+En esta fase se carga el corpus correspondiente al Tomo 2 (1913) y se transforma en una tabla de tokens. Se conserva el título de cada rondalla y su identificador para poder realizar análisis globales y también por documento. La limpieza incluye la conversión a minúsculas, la eliminación de signos no alfabéticos y el filtrado de palabras de longitud inferior a tres caracteres. Además, se eliminan palabras vacías propias del mallorquín/catalán, ya que tienen una función gramatical pero no aportan significado temático al análisis.
+
+
+Dado que el texto procede de OCR, se revisan posibles formas anómalas o errores de reconocimiento. Algunas palabras extrañas pueden permanecer en el corpus y se tendrán en cuenta en la interpretación de frecuencias y TF-IDF.
+
+```{r}
+tomo2 <- read_csv("raw_text/rondalles_ocr_tomo2.csv")
+n=dim(tomo2)[1]
+n
+# empieza la primera rondalla en la página 8
+tomo2=tomo2[-c(1:7),]
+tabla2 <- read_csv("tabla_tomo2.csv")
+colnames(tabla2) = c("titulo", "pagina", "final")
+tabla2$final=c(tabla2$pagina[-1]-1,n)
+knitr::kable(tabla2)
+titulo=tabla2$titulo
+```
+
+Agrupemos cada rondalla en una entrada del corpus, utilizando la tabla de contenidos para identificar los límites de cada rondalla y luego extraer el texto correspondiente a cada una de ellas.
+
+
+```{r}
+extrae <- function(i) {
+  tomo2 %>%
+    filter(pagina >= tabla2$pagina[i] & pagina <= tabla2$final[i]) %>%
+    pull(texto) %>%
+    paste(collapse = "\n")}
+
+
+sapply(1:length(titulo), extrae)-> rondallas
+id_rondalla = 1:length(titulo)
+corpus2=tibble(titulo,rondallas, id_rondalla)
+corpus2
+```
+
+```{r}
+tokens2 <- corpus2 %>%
+  unnest_tokens(
+    output = paraula,
+    input = rondallas
+  ) %>%
+  mutate(
+    paraula = str_to_lower(paraula),
+    paraula = str_replace_all(paraula, "[^[:alpha:]àèéíïòóúüç·-]", "")
+  ) %>%
+  filter(
+    paraula != "",
+    str_length(paraula) > 2
+  )
+
+tokens2
+
+stopwords_mallorqui <- tibble(
+  paraula = c(
+    "es", "sa", "ses", "ets", "que",  "una",
+    "amb", "per", "com", "no", "si", "el", "la", "els", "les",
+    "des", "pes", "mos", "vos", "se", "va", "fer", "més",
+    "qui", "cap", "ell", "tot", "los", "havia", "ben", "tan",
+    "era", "esser", "haver", "aont", "això", "aquell",
+    "aquella", "tots", "tota", "altre", "altra", "ehi", "hi",
+    "però", "perque", "quan", "dins", "també", "així",
+    "digué", "diu", "llavò", "ara", "aquesta", "aquest",
+    "després", "ja", "pero"
+  )
+)
+
+tokens2_net <- tokens2 %>%
+  anti_join(stopwords_mallorqui, by = "paraula")
+
+tokens2_net
+```
+
+### Pregunta 2
+
+```{r}
+freq_global <- tokens2_net %>%
+  count(paraula, sort = TRUE)
+
+freq_global
+
+freq_global %>%
+  slice_max(n, n = 15) %>%
+  ggplot(aes(x = reorder(paraula, n), y = n)) +
+  geom_col(fill = "blue")+
+  coord_flip() +
+  labs(
+    title = "Palabras más frecuentes en el aplec",
+    x = "Palabra",
+    y = "Frecuencia"
+  )
+```
+
+El gráfico de barras nos desvela cuáles son los personajes o elementos principales del libro. Palabras como `"rei"`, `"fill"`, `"casa"` , `"mallorquines"` o `"ella"` ocupan los primeros puestos. Esto tiene mucho sentido dentro del folclore tradicional, donde la gran mayoría de las tramas se desencadenan en torno a las órdenes de un rey, las aventuras de sus hijos o lo que ocurre en los hogares tradicionales mallorquines.
+
+
+### Pregunta 3
+Vamos a representar la frecuencia frente a rango en escala normal
+```{r}
+freq_rank <- freq_global %>%
+  mutate(rango = row_number())
+
+ggplot(freq_rank, aes(x = rango, y = n)) +
+  geom_point() +
+  labs(
+    title = "Frecuencia frente a rango",
+    x = "Rango",
+    y = "Frecuencia"
+  ) +
+  theme_minimal()
+```
+
+Este gráfico tiene forma curva debido a que las palabras que se repiten en un texto suelen ser pocas, mientras que las que no se repiten suelen ser un número mayor. Ahora veamos el mismo gráfico con escala logaritmica.
+
+```{r}
+zipf <- freq_global %>%
+  mutate(rango = row_number(), tf = n/sum(n))
+
+zipf %>%
+  ggplot(aes(x = rango, y = tf)) +
+  geom_line(color = "blue", linewidth = 1) +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(
+    title = "Ley de Zipf en las rondallas",
+    x = "Rango (log)",
+    y = "Frecuencia (log)"
+  )+ 
+  theme_minimal()
+```
+
+El gráfico en escala logarítmica muestra una tendencia aproximadamente lineal descendente, por lo que el patrón observado es compatible con la ley de Zipf. No obstante, no puede afirmarse que la cumpla perfectamente, ya que aparecen desviaciones en los rangos altos y bajos, probablemente debidas a palabras muy poco frecuentes, variantes lingüísticas y posibles errores de OCR.
+
+Estudiemos ahora la ley de Zipf en cada rondalla:
+
+```{r}
+freq_rondalla <- tokens2_net %>%
+  count(titulo, paraula, sort = TRUE)
+
+zipf_rondalla <- freq_rondalla %>%
+  group_by(titulo) %>%
+  arrange(desc(n), .by_group = TRUE) %>%
+  mutate(rango = row_number()) %>%
+  ungroup() # %>% filter(rango<980, rango>20)
+
+
+
+zipf_rondalla %>%
+  ggplot(aes(x = rango, y = n/sum(n), color = titulo)) +
+  geom_line() +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(
+    title = "Ley de Zipf por rondalla",
+    x = "Rango (log)",
+    y = "Frecuencia (log)"
+  ) +
+  
+  theme(legend.position = "none")
+```
+
+Podemos observar que en cada rondalla se cumple la ley de Zipf, ya que en general en cada gráfica podemos ver una curva similar a  diagonal decreciente.
+Sin embargo, las ligeras diferencias que hay entre rondallas se deben a la longitud de estas, ya que algunas rondallas son de tan solo 10 páginas, mientras que hay otras de más de 50, por lo que la frecuencia de las palabras como el tamaño del corpus por rondalla son diferentes, y así se puede ver en el gráfico.
+
+
+
+### Pregunta 4
+
+En ausencia de una comparación directa con otro aplec, se ha dividido el Tomo 2 en dos bloques para estudiar si existen diferencias internas dentro del corpus. Esta comparación permite observar si el vocabulario se mantiene estable o si aparecen cambios temáticos entre las rondallas iniciales y finales.
+
+```{r}
+# Encontrar el punto medio del número de rondallas
+mitad_corte <- max(tokens2_net$id_rondalla) / 2
+
+# Agrupar por mitades y sacar las 15 palabras más usadas en cada una
+tokens2_net %>%
+  mutate(mitad = ifelse(id_rondalla <= mitad_corte, "Primera Mitad (Cuentos Iniciales)", "Segunda Mitad (Cuentos Finales)")) %>%
+  count(mitad, paraula) %>%
+  group_by(mitad) %>%
+  slice_max(n, n = 15) %>%
+  ungroup() %>%
+  mutate(word = reorder_within(paraula, n, mitad)) %>%
+  ggplot(aes(n, paraula, fill = mitad)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~mitad, scales = "free_y") +
+  scale_y_reordered() +
+  labs(title = "Comparación de palabras entre la primera y la segunda mitad del Tomo 2", 
+       x = "Frecuencia", 
+       y = "Palabras") +
+  theme_minimal()
+```
+
+El gráfico demuestra que las 15 palabras en ambos bloques es prácticamente idéntico (`"rei"`, `"res"`, `"dir"`, `"allà"`...). Esto nos indica que el estilo de las rondallas es homogéneo y muy estable a lo largo de todo el Tomo II.
+
+### Pregunta 5
+
+```{r}
+tfidf <- tokens2_net %>%
+  count(titulo, paraula) %>%
+  bind_tf_idf(paraula, titulo, n)
+
+tfidf
+
+top_tfidf <- tfidf %>%
+  group_by(titulo) %>%
+  slice_max(tf_idf, n = 10) %>%
+  ungroup()
+
+top_tfidf
+
+top_tfidf %>%
+  ggplot(aes(x = reorder_within(paraula, tf_idf, titulo), y = tf_idf)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  facet_wrap(~ titulo, scales = "free") +
+  scale_x_reordered() +
+  labs(
+    title = "Palabras más características por rondalla (TF-IDF)",
+    x = "Palabra",
+    y = "TF-IDF"
+  )
+
+tfidf %>%
+  slice_max(tf_idf, n = 20, with_ties = FALSE) %>% # 'with_ties = FALSE' asegura exactamente 20 elementos
+  ggplot(aes(x = reorder_within(paraula, tf_idf, tf_idf), y = tf_idf)) + # Forzamos el orden por el propio valor
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  scale_x_reordered() + # Esto elimina los sufijos que añade reorder_within
+  labs(
+    title = "Palabras más características del corpus (TF-IDF)",
+    x = "Palabra",
+    y = "TF-IDF"
+  )
+```
+
+Recordemos que el idf de una palabra es $\ln\frac{n_{documentos\ totales}}{n_{documentos\ que \ contienen \ la\  palabra}}$.
+
+Vemos que las palabras que aparecen con un tf-idf alto son palabras poco comunes en general, que es lo que queríamos ver ("soldadet", "gostí", "motxilla",...)
+
+También cabe mecionar el caso de la palabra "Catalineta", que aparece con un tf-idf bastante alto, lo cual quiere decir que es una palabra poco común en todo el corpus, a pesar de que hemos visto que es una de las palabras que más aparecen en la segunda mitad de las rondallas del tomo 2 (de hecho, tiene un valor idf cercano a 3, de los más altos de la tabla).
+
+Para saber qué hace especial a cada rondalla, hemos utilizado una métrica llamada *TF-IDF*. En lugar de mirar solo las palabras que más se repiten (que suelen ser siempre las mismas, como "el", "la" o "que"), esta técnica nos ayuda a filtrar lo genérico para encontrar las palabras que realmente dan personalidad a cada historia.
+
+Al observar los gráficos, podemos destacar tres puntos clave:
+
+* *Identificación rápida del contenido:* Las palabras con mayor peso en el gráfico funcionan como etiquetas temáticas. Por ejemplo, en rondallas donde aparecen términos como "princesa", "gegant" o "serp", el gráfico nos permite identificar el tema principal de la historia de un vistazo, sin necesidad de leer el texto completo.
+* *La "huella digital" de cada relato:* Cada rondalla tiene su propio perfil de palabras distintivas. Esto demuestra que Jordi des Racó utiliza un vocabulario específico para cada historia, lo que diferencia claramente un relato de otro dentro del mismo aplec.
+* *Utilidad para el análisis:* Gracias a este filtrado, hemos logrado reducir la complejidad del texto. Esto es fundamental, ya que nos permite enfocarnos en lo que realmente hace única a cada narración, facilitando pasos posteriores como el modelo de tópicos o el estudio de las relaciones entre conceptos.
+
+En definitiva, este análisis nos ofrece una "lectura rápida" de toda la obra. Nos confirma que, aunque todas las rondallas pertenecen a un mismo autor, cada una construye un universo propio a través de su vocabulario característico.
+
+### Pregunta 6
+
+Para aplicar el modelo Latent Dirichlet Allocation (LDA), primero necesitamos convertir nuestro recuento de palabras por rondalla en una matriz de documentos y términos (DTM). Se ha elegido trabajar con 4 tópicos porque permite obtener una división suficientemente interpretable del corpus sin fragmentar en exceso los resultados. Un número menor de tópicos agruparía temas demasiado generales, mientras que un número mayor podría generar temas difíciles de interpretar o demasiado dependientes de rondallas concretas. Por tanto, se adopta k = 4 como solución exploratoria equilibrada.
+
+```{r}
+# 1. Crear la matriz Document-Term (DTM)
+dtm_rondallas <- tokens2_net %>%
+  count(titulo, paraula) %>%
+  cast_dtm(document = titulo, term = paraula, value = n)
+
+# 2. Entrenar el modelo LDA con 4 temas (k = 4)
+set.seed(1234)
+lda_model <- LDA(dtm_rondallas, k = 4, control = list(seed = 1234))
+
+# 3. Extraer las probabilidades de cada palabra por tema (matriz beta)
+lda_topics <- tidy(lda_model, matrix = "beta")
+
+# 4. Obtener las 10 palabras más probables de cada tema
+top_terms_lda <- lda_topics %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+# 5. Visualizar los temas
+top_terms_lda %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(x = term, y = beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(
+    title = "Temas principales en las rondallas (LDA)",
+    x = "Palabra",
+    y = "Probabilidad (beta)"
+  ) +
+  theme_minimal()
+```
+
+#### Interpretación de los temas (LDA)
+
+A partir de la distribución de las palabras con mayor probabilidad (beta) en cada uno de los 4 temas, podemos deducir que el modelo LDA ha agrupado los textos basándose principalmente en los **personajes protagonistas** de rondallas específicas. 
+
+* **Tema 1 (El Rey / La Realeza):** Destaca la palabra **"rei"**, agrupando probablemente las rondallas donde la figura real o la corte tienen un peso argumental central.
+* **Tema 2 (Bernat y el Gigante):** Las palabras **"bernat"**, **"gigant"** y **"lamo"** (l'amo) indican que este tema captura de forma muy clara el vocabulario de una o varias rondallas concretas en torno a estos personajes.
+* **Tema 3 (El Rey Moro y Catalineta):** Agrupa fuertemente términos como **"rei"**, **"moro"** y **"catalineta"**, identificando sin lugar a dudas el contexto semántico de la rondalla de *Na Catalineta* (o similares).
+* **Tema 4 (Pere y el Soldadito):** Destacan las palabras **"pere"**, **"soldadet"**, **"mort"** y **"rondaies"**, vinculadas a narraciones con estos elementos temáticos o protagonistas.
+
+**Nota metodológica sobre el vocabulario:** En los resultados visuales se observa la presencia recurrente de términos como *"dir", "havia", "sen", "res", "ella", "veure", "allà"* y *"son"* copando los primeros puestos de casi todos los temas. Estas palabras actúan como ruido estadístico: son verbos muy comunes, pronombres o variantes ortográficas propias del texto original (y del OCR) que no aportan un valor semántico diferencial. Para refinar los clústers en el futuro, se ha evidenciado la necesidad de ampliar el diccionario inicial de *stopwords* para incluir y filtrar estos términos.
+
+### Pregunta 7
+
+Para el calculo de los vectores se seleccionan las 150 palabras más frecuentes para facilitar la visualización y evitar que el gráfico quede saturado. Esta selección permite observar relaciones semánticas entre términos relevantes del corpus sin introducir demasiado ruido visual.
+
+```{r}
+# 1. Preparar el texto limpio (una cadena de texto por rondalla)
+textos_limpios <- tokens2_net %>%
+  group_by(titulo) %>%
+  summarise(texto_unido = paste(paraula, collapse = " ")) %>%
+  pull(texto_unido)
+
+# 2. Entrenar el modelo word2vec (usamos skip-gram, dim = 50)
+set.seed(1234)
+modelo_w2v <- word2vec(x = textos_limpios, type = "skip-gram", dim = 50, iter = 20)
+
+# 3. Extraer la matriz de embeddings
+embeddings <- as.matrix(modelo_w2v)
+
+# 4. Seleccionar las 150 palabras más frecuentes para visualizar
+top_150_palabras <- freq_global %>%
+  slice_max(n, n = 150) %>%
+  pull(paraula)
+
+# Filtrar la matriz para quedarnos solo con las palabras seleccionadas
+emb_filtrados <- embeddings[rownames(embeddings) %in% top_150_palabras, ]
+
+# 5. Proyectar a 2 dimensiones con t-SNE
+set.seed(42)
+tsne_res <- Rtsne(emb_filtrados, dims = 2, perplexity = 15, check_duplicates = FALSE)
+
+# 6. Crear un dataframe y visualizar
+df_tsne <- data.frame(
+  paraula = rownames(emb_filtrados),
+  X = tsne_res$Y[, 1],
+  Y = tsne_res$Y[, 2]
+)
+
+df_tsne %>%
+  ggplot(aes(x = X, y = Y, label = paraula)) +
+  geom_point(color = "lightblue", size = 2) +
+  geom_text(vjust = 1, hjust = 1, size = 3, check_overlap = TRUE) +
+  theme_minimal() +
+  labs(
+    title = "Proyección t-SNE de las palabras de las rondallas",
+    x = "Dimensión 1",
+    y = "Dimensión 2"
+  )
+```
+
+#### Interpretación de la proyección semántica (Word2Vec y t-SNE)
+
+Al proyectar las palabras más frecuentes en un plano bidimensional mediante t-SNE con una perplejidad de 15, observamos que **no se forman agrupaciones ("clústers") hiperdefinidas o aisladas**, sino que los términos se distribuyen formando una nube difusa o continuo semántico. 
+
+Lejos de ser un error, este comportamiento es esperable y se explica por dos limitaciones metodológicas y narrativas:
+
+1. **Limitación del volumen de datos:** Los modelos de *word embeddings* como Word2Vec necesitan corpus gigantescos (de millones de palabras) para que los vectores generen repulsiones fuertes y formen "islas" separadas. Un solo tomo de rondallas representa un corpus relativamente pequeño, limitando la diferenciación espacial extrema de los vectores.
+2. **Estructura narrativa fuertemente interconectada:** En los cuentos tradicionales, los contextos se solapan constantemente. Un "rei" interactúa con un "dimoni", un "gigant" va a un "castell", y la "princesa" huye al "bosc". Como casi todos los personajes y objetos mágicos comparten las mismas acciones y espacios narrativos, Word2Vec los aproxima en el espacio multidimensional.
+
+A pesar de ser un continuo, sí se pueden apreciar **afinidades relativas** en el espacio:
+* El **núcleo central** actúa como el eje vertebrador del texto, aglutinando el vocabulario estructural de los relatos: verbos de acción y comunicación ("dir", "respòn", "tornar", "veure") y marcadores temporales ("temps", "hora", "dies").
+* Hacia la **periferia** (los bordes de la nube) tienden a desplazarse ligeramente los sustantivos que dan color al cuento, como figuras de autoridad y familia ("rei", "reina", "pare", "mare") en la zona superior, o elementos de antagonismo y naturaleza ("dimoni", "gigant", "porcs", "pedra") hacia la izquierda, aunque sin llegar a romper la cohesión con el resto del vocabulario.
+
+Para aislar comunidades semánticas de forma más estricta y sortear este solapamiento de los *embeddings*, resulta necesario aplicar un umbral de similitud duro, aproximación que se desarrollará mediante el análisis de redes en el siguiente apartado.
+
+### Pregunta 8
+
+```{r}
+# 1. Calcular la matriz de similitud del coseno
+# Normalizamos los vectores primero para que el producto matricial sea igual al coseno
+norm_emb <- emb_filtrados / sqrt(rowSums(emb_filtrados^2))
+sim_matrix <- norm_emb %*% t(norm_emb)
+
+# 2. Aplicar un umbral (threshold) para podar el grafo
+umbral <- 0.4 # Puedes subir o bajar este valor para hacer el grafo más o menos denso
+adj_matrix <- sim_matrix
+adj_matrix[adj_matrix < umbral] <- 0
+diag(adj_matrix) <- 0 # Eliminar auto-bucles
+
+# 3. Construir el grafo con igraph
+grafo_palabras <- graph_from_adjacency_matrix(
+  adj_matrix, 
+  mode = "undirected", 
+  weighted = TRUE
+)
+
+# Eliminar nodos aislados (palabras sin conexiones tras aplicar el umbral)
+grafo_palabras <- delete_vertices(grafo_palabras, degree(grafo_palabras) == 0)
+
+# 4. Detectar comunidades (algoritmo de Louvain)
+comunidades <- cluster_louvain(grafo_palabras)
+V(grafo_palabras)$comunidad <- as.factor(membership(comunidades))
+
+# 5. Calcular la centralidad de Eigenvector para ver qué palabras son más centrales
+centralidad <- eigen_centrality(grafo_palabras)$vector
+V(grafo_palabras)$centralidad <- centralidad
+
+# Mostrar las 10 palabras más centrales en la consola
+top_centrales <- data.frame(
+  palabra = V(grafo_palabras)$name,
+  centralidad = centralidad
+) %>% arrange(desc(centralidad))
+
+head(top_centrales, 10)
+
+# 6. Visualizar el grafo de comunidades con ggraph
+set.seed(2023)
+ggraph(grafo_palabras, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = weight), show.legend = FALSE, color = "gray80") +
+  geom_node_point(aes(color = comunidad, size = centralidad)) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3, max.overlaps = Inf) +
+  theme_graph() +
+  labs(
+    title = "Grafo de comunidades de palabras",
+    subtitle = paste("Umbral de similitud del coseno:", umbral),
+    color = "Comunidad",
+    size = "Centralidad"
+  )
+```
+
+#### Interpretación de la red de similitud y comunidades (Grafo y Centralidad)
+El umbral de similitud 0.4 se utiliza como criterio de poda para conservar únicamente relaciones suficientemente fuertes entre palabras. De este modo, se evita que el grafo sea demasiado denso y se facilita la detección de comunidades. El análisis de esta red revela dos aspectos fundamentales de la arquitectura del corpus:
+
+**1. Detección de Comunidades (Algoritmo de Louvain)**
+Al optimizar la modularidad de la red, el algoritmo de Louvain logra aislar clústers semánticos con fronteras mucho más claras que la proyección t-SNE. Observando la topología del grafo, destacan las siguientes subredes:
+* **Comunidad Verde (Antagonistas y folclore):** Situada en un extremo, agrupa nodos altamente conectados entre sí como **"gigant"**, **"dimoni"**, **"bernat"** y **"porcs"**. Representa el contexto de los obstáculos y elementos populares de las pruebas narrativas.
+* **Comunidad Azul (Autoridad y orden jerárquico):** En el sector derecho de la red se consolida un bloque robusto que asocia figuras de poder y filiación: **"rei"**, **"reina"**, **"pare"**, **"mare"** y **"senyor"**.
+* **Zona central (Comunidades centrales):** Agrupa el vocabulario dinámico (verbos y marcadores de tiempo) que actúa como puente estructural para unir a los diferentes personajes de la periferia.
+
+**2. Análisis de Centralidad (Eigenvector)**
+Para cuantificar la importancia de cada palabra en la red, se ha utilizado la centralidad de vector propio (*Eigenvector centrality*), la cual se obtiene a partir del vector propio dominante de la matriz de adyacencia del grafo. Esta métrica no solo evalúa el número de conexiones de un nodo, sino la calidad de estas (estar conectado a nodos que a su vez son muy influyentes).
+
+Al observar los 10 nodos más centrales de la tabla, extraemos dos conclusiones clave:
+* **Nodos conectores (hubs) narrativos:** Las palabras con centralidad cercana o igual a 1 (**"havia"**, **"dir"**, **"veure"**) corroboran lo observado en los modelos anteriores. Como pilares de la acción y la descripción temporal, son estadísticamente indispensables para articular la narrativa, conectando todas las comunidades temáticas.
+* **Centro de gravedad temático:** Resulta muy revelador que **"rei"** alcance un valor de centralidad tan elevado (0.65). Es el primer sustantivo no estructural de la lista, lo que demuestra matemáticamente que la figura del rey actúa como el centro de gravedad argumental alrededor del cual orbitan e interaccionan la mayoría de las rondallas analizadas.
+
+
+
+
+### Disclaimer de uso de IA
+En este trabajo colaborativo, se utilizaron los modelos de lenguaje a gran escala ChatGPT (OpenAI) y Microsoft Copilot como herramientas de soporte. Estas tecnologías se emplearon exclusivamente para la optimización en la búsqueda de referencias académicas y la elaboración de resúmenes preliminares de los documentos analizados. Los autores revisaron, contrastaron y complementaron críticamente toda la información obtenida, aportando los comentarios, análisis y conclusiones finales presentes en este documento.
