@@ -83,7 +83,8 @@ stopwords_mallorqui <- tibble(
     "aquella", "tots", "tota", "altre", "altra", "ehi", "hi",
     "però", "perque", "quan", "dins", "també", "així",
     "digué", "diu", "llavò", "ara", "aquesta", "aquest",
-    "després", "ja", "pero"
+    "després", "ja", "pero","del","dir","res","veure","sen","son","ter","allà",
+    "vaig","havía"
   )
 )
 
@@ -254,26 +255,27 @@ tfidf %>%
     y = "TF-IDF"
   )
 ```
+Para saber qué hace especial a cada rondalla, hemos utilizado una métrica llamada *TF-IDF*. En lugar de mirar solo las palabras que más se repiten (que suelen ser siempre las mismas, como "el", "la" o "que"), esta técnica nos ayuda a filtrar lo genérico para encontrar las palabras que realmente dan personalidad a cada historia.
 
 Recordemos que el idf de una palabra es $\ln\frac{n_{documentos\ totales}}{n_{documentos\ que \ contienen \ la\  palabra}}$.
 
-Vemos que las palabras que aparecen con un tf-idf alto son palabras poco comunes en general, que es lo que queríamos ver ("soldadet", "gostí", "motxilla",...)
+Vemos que las palabras que aparecen con un tf-idf alto son palabras poco comunes en general, ("soldadet", "massot", "motxilla",...), o nombres propios de personajes, que son los protagonistas de las rondallas ("Catalineta", "gostí", "robert", "juanet",...).
 
 También cabe mecionar el caso de la palabra "Catalineta", que aparece con un tf-idf bastante alto, lo cual quiere decir que es una palabra poco común en todo el corpus, a pesar de que hemos visto que es una de las palabras que más aparecen en la segunda mitad de las rondallas del tomo 2 (de hecho, tiene un valor idf cercano a 3, de los más altos de la tabla).
 
-Para saber qué hace especial a cada rondalla, hemos utilizado una métrica llamada *TF-IDF*. En lugar de mirar solo las palabras que más se repiten (que suelen ser siempre las mismas, como "el", "la" o "que"), esta técnica nos ayuda a filtrar lo genérico para encontrar las palabras que realmente dan personalidad a cada historia.
 
-Al observar los gráficos, podemos destacar tres puntos clave:
 
-* *Identificación rápida del contenido:* Las palabras con mayor peso en el gráfico funcionan como etiquetas temáticas. Por ejemplo, en rondallas donde aparecen términos como "princesa", "gegant" o "serp", el gráfico nos permite identificar el tema principal de la historia de un vistazo, sin necesidad de leer el texto completo.
-* *La "huella digital" de cada relato:* Cada rondalla tiene su propio perfil de palabras distintivas. Esto demuestra que Jordi des Racó utiliza un vocabulario específico para cada historia, lo que diferencia claramente un relato de otro dentro del mismo aplec.
-* *Utilidad para el análisis:* Gracias a este filtrado, hemos logrado reducir la complejidad del texto. Esto es fundamental, ya que nos permite enfocarnos en lo que realmente hace única a cada narración, facilitando pasos posteriores como el modelo de tópicos o el estudio de las relaciones entre conceptos.
+Al observar los gráficos, podemos destacar los siguientes puntos clave:
 
-En definitiva, este análisis nos ofrece una "lectura rápida" de toda la obra. Nos confirma que, aunque todas las rondallas pertenecen a un mismo autor, cada una construye un universo propio a través de su vocabulario característico.
+ Las palabras con mayor peso en el gráfico funcionan como indicadores del tema.  Es decir, el gráfico nos permite identificar el tema principal de la historia de un vistazo, sin necesidad de leer el texto completo.
+ 
+Cada rondalla tiene su propio perfil de palabras distintivas, lo que diferencia claramente un relato de otro dentro del mismo aplec.
+
+Gracias a este filtrado, hemos logrado reducir la complejidad del texto. Esto es fundamental, ya que nos permite enfocarnos en lo que realmente hace única a cada narración, facilitando pasos posteriores como el modelo de tópicos o el estudio de las relaciones entre conceptos.
 
 ### Pregunta 6
 
-Para aplicar el modelo Latent Dirichlet Allocation (LDA), primero necesitamos convertir nuestro recuento de palabras por rondalla en una matriz de documentos y términos (DTM). Se ha elegido trabajar con 4 tópicos porque permite obtener una división suficientemente interpretable del corpus sin fragmentar en exceso los resultados. Un número menor de tópicos agruparía temas demasiado generales, mientras que un número mayor podría generar temas difíciles de interpretar o demasiado dependientes de rondallas concretas. Por tanto, se adopta k = 4 como solución exploratoria equilibrada.
+Para aplicar el modelo Latent Dirichlet Allocation (LDA), primero necesitamos convertir nuestro recuento de palabras por rondalla en una matriz de documentos y términos (DTM). Se ha elegido trabajar con 3 tópicos porque permite obtener una división suficientemente interpretable del corpus sin fragmentar en exceso los resultados. Un número menor de tópicos agruparía temas demasiado generales, mientras que un número mayor podría generar temas difíciles de interpretar o demasiado dependientes de rondallas concretas. Por tanto, se adopta k = 3 como solución exploratoria equilibrada.
 
 ```{r}
 # 1. Crear la matriz Document-Term (DTM)
@@ -281,17 +283,17 @@ dtm_rondallas <- tokens2_net %>%
   count(titulo, paraula) %>%
   cast_dtm(document = titulo, term = paraula, value = n)
 
-# 2. Entrenar el modelo LDA con 4 temas (k = 4)
+# 2. Entrenar el modelo LDA con 3 temas (k = 3)
 set.seed(1234)
-lda_model <- LDA(dtm_rondallas, k = 4, control = list(seed = 1234))
+lda_model <- LDA(dtm_rondallas, k = 3, control = list(seed = 1234))
 
 # 3. Extraer las probabilidades de cada palabra por tema (matriz beta)
 lda_topics <- tidy(lda_model, matrix = "beta")
 
-# 4. Obtener las 10 palabras más probables de cada tema
+# 4. Obtener las 15 palabras más probables de cada tema
 top_terms_lda <- lda_topics %>%
   group_by(topic) %>%
-  slice_max(beta, n = 10) %>%
+  slice_max(beta, n = 15) %>%
   ungroup() %>%
   arrange(topic, -beta)
 
@@ -313,14 +315,14 @@ top_terms_lda %>%
 
 #### Interpretación de los temas (LDA)
 
-A partir de la distribución de las palabras con mayor probabilidad (beta) en cada uno de los 4 temas, podemos deducir que el modelo LDA ha agrupado los textos basándose principalmente en los **personajes protagonistas** de rondallas específicas. 
+A partir de la distribución de las palabras con mayor probabilidad (beta) en cada uno de los 3 temas, podemos deducir que el modelo LDA ha agrupado los textos basándose principalmente en los **personajes protagonistas** de rondallas específicas. 
 
-* **Tema 1 (El Rey / La Realeza):** Destaca la palabra **"rei"**, agrupando probablemente las rondallas donde la figura real o la corte tienen un peso argumental central.
-* **Tema 2 (Bernat y el Gigante):** Las palabras **"bernat"**, **"gigant"** y **"lamo"** (l'amo) indican que este tema captura de forma muy clara el vocabulario de una o varias rondallas concretas en torno a estos personajes.
-* **Tema 3 (El Rey Moro y Catalineta):** Agrupa fuertemente términos como **"rei"**, **"moro"** y **"catalineta"**, identificando sin lugar a dudas el contexto semántico de la rondalla de *Na Catalineta* (o similares).
-* **Tema 4 (Pere y el Soldadito):** Destacan las palabras **"pere"**, **"soldadet"**, **"mort"** y **"rondaies"**, vinculadas a narraciones con estos elementos temáticos o protagonistas.
+* **Tema 1 (Bernat y el Gigante):** Las palabras **"bernat"**, **"gigant"** y **"lamo"** (l'amo) indican que este tema captura de forma muy clara el vocabulario de una o varias rondallas concretas en torno a estos personajes.
+* **Tema 2 (El Rey Moro y Catalineta):** Agrupa fuertemente términos como **"rei"**, **"moro"** y **"catalineta"**, identificando sin lugar a dudas el contexto semántico de la rondalla de *Na Catalineta* (o similares).
+* **Tema 3 (Juanet y la princesa):** Destacan las palabras **"Juanet"**, **"princesa"**  vinculadas a narraciones con estos elementos temáticos o protagonistas.
 
-**Nota metodológica sobre el vocabulario:** En los resultados visuales se observa la presencia recurrente de términos como *"dir", "havia", "sen", "res", "ella", "veure", "allà"* y *"son"* copando los primeros puestos de casi todos los temas. Estas palabras actúan como ruido estadístico: son verbos muy comunes, pronombres o variantes ortográficas propias del texto original (y del OCR) que no aportan un valor semántico diferencial. Para refinar los clústers en el futuro, se ha evidenciado la necesidad de ampliar el diccionario inicial de *stopwords* para incluir y filtrar estos términos.
+
+
 
 ### Pregunta 7
 
