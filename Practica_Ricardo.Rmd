@@ -388,7 +388,7 @@ Para aislar comunidades semánticas de forma más estricta y sortear este solapa
 
 ### Pregunta 8
 
-```{r}
+```{r, warning=FALSE}
 # 1. Calcular la matriz de similitud del coseno
 # Normalizamos los vectores primero para que el producto matricial sea igual al coseno
 norm_emb <- emb_filtrados / sqrt(rowSums(emb_filtrados^2))
