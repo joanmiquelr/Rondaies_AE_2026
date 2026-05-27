@@ -381,7 +381,9 @@ Lejos de ser un error, este comportamiento es esperable y se explica por dos lim
 2. **Estructura narrativa fuertemente interconectada:** En los cuentos tradicionales, los contextos se solapan constantemente. Un "rei" interactúa con un "dimoni", un "gigant" va a un "castell", y la "princesa" huye al "bosc". Como casi todos los personajes y objetos mágicos comparten las mismas acciones y espacios narrativos, Word2Vec los aproxima en el espacio multidimensional.
 
 A pesar de ser un continuo, sí se pueden apreciar **afinidades relativas** en el espacio:
+
 * El **núcleo central** actúa como el eje vertebrador del texto, aglutinando el vocabulario estructural de los relatos: verbos de acción y comunicación ("dir", "respòn", "tornar", "veure") y marcadores temporales ("temps", "hora", "dies").
+
 * Hacia la **periferia** (los bordes de la nube) tienden a desplazarse ligeramente los sustantivos que dan color al cuento, como figuras de autoridad y familia ("rei", "reina", "pare", "mare") en la zona superior, o elementos de antagonismo y naturaleza ("dimoni", "gigant", "porcs", "pedra") hacia la izquierda, aunque sin llegar a romper la cohesión con el resto del vocabulario.
 
 Para aislar comunidades semánticas de forma más estricta y sortear este solapamiento de los *embeddings*, resulta necesario aplicar un umbral de similitud duro, aproximación que se desarrollará mediante el análisis de redes en el siguiente apartado.
@@ -446,8 +448,10 @@ El umbral de similitud 0.4 se utiliza como criterio de poda para conservar únic
 
 **1. Detección de Comunidades (Algoritmo de Louvain)**
 Al optimizar la modularidad de la red, el algoritmo de Louvain logra aislar clústers semánticos con fronteras mucho más claras que la proyección t-SNE. Observando la topología del grafo, destacan las siguientes subredes:
+
 * **Comunidad Verde (Antagonistas y folclore):** Situada en un extremo, agrupa nodos altamente conectados entre sí como **"gigant"**, **"dimoni"**, **"bernat"** y **"porcs"**. Representa el contexto de los obstáculos y elementos populares de las pruebas narrativas.
 * **Comunidad Azul (Autoridad y orden jerárquico):** En el sector derecho de la red se consolida un bloque robusto que asocia figuras de poder y filiación: **"rei"**, **"reina"**, **"pare"**, **"mare"** y **"senyor"**.
+
 * **Zona central (Comunidades centrales):** Agrupa el vocabulario dinámico (verbos y marcadores de tiempo) que actúa como puente estructural para unir a los diferentes personajes de la periferia.
 
 **2. Análisis de Centralidad (Eigenvector)**
