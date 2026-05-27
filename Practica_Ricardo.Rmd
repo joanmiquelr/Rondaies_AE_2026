@@ -328,7 +328,7 @@ A partir de la distribución de las palabras con mayor probabilidad (beta) en ca
 
 Para el calculo de los vectores se seleccionan las 150 palabras más frecuentes para facilitar la visualización y evitar que el gráfico quede saturado. Esta selección permite observar relaciones semánticas entre términos relevantes del corpus sin introducir demasiado ruido visual.
 
-```{r}
+```{r, results ='hide'}
 # 1. Preparar el texto limpio (una cadena de texto por rondalla)
 textos_limpios <- tokens2_net %>%
   group_by(titulo) %>%
@@ -361,7 +361,7 @@ df_tsne <- data.frame(
   Y = tsne_res$Y[, 2]
 )
 
-df_tsne %>%
+grafico2 = df_tsne %>%
   ggplot(aes(x = X, y = Y, label = paraula)) +
   geom_point(color = "lightblue", size = 2) +
   geom_text(vjust = 1, hjust = 1, size = 3, check_overlap = TRUE) +
@@ -372,7 +372,9 @@ df_tsne %>%
     y = "Dimensión 2"
   )
 ```
-
+```{r, echo=FALSE, out.width="60%", fig.align='center'}
+knitr::include_graphics("C://Rondaies_AE_2026//Imagenes//t-SNE.png")
+```
 #### Interpretación de la proyección semántica (Word2Vec y t-SNE)
 
 Al proyectar las palabras más frecuentes en un plano bidimensional mediante t-SNE con una perplejidad de 15, observamos que **no se forman agrupaciones ("clústers") hiperdefinidas o aisladas**, sino que los términos se distribuyen formando una nube difusa o continuo semántico. 
@@ -384,9 +386,11 @@ Lejos de ser un error, este comportamiento es esperable y se explica por dos lim
 
 A pesar de ser un continuo, sí se pueden apreciar **afinidades relativas** en el espacio:
 
-* La zona central del gráfico concentra principalmente vocabulario muy frecuente y estructural del relato.
+* La zona central del gráfico concentra principalmente vocabulario muy frecuente y estructural del relato. Aparecen palabras como “just”, “treure”, “tenir”, “tenc”, “anar” o “anava”.
 
-* En las zonas más periféricas aparecen términos asociados a contextos más específicos o menos conectados. 
+* En las zonas más periféricas aparecen términos asociados a contextos más específicos o menos conectados. En la parte superior destacan palabras como “bernat”, “porcs”, “cases” o “madona”, mientras que hacia la derecha aparecen términos como “cel”, “creure” o “heu”. Por otro lado, en la región inferior izquierda se observan palabras como “mort”, “deu”, “sant” o “donar”. 
+
+A pesar de esta dispersión espacial, no se forman clústers completamente aislados, lo que sugiere que el vocabulario de las rondallas mantiene una estructura narrativa global altamente interconectada.
 
 Para aislar comunidades semánticas de forma más estricta y sortear este solapamiento de los *embeddings*, resulta necesario aplicar un umbral de similitud duro, aproximación que se desarrollará mediante el análisis de redes en el siguiente apartado.
 
@@ -432,7 +436,7 @@ head(top_centrales, 10)
 
 # 6. Visualizar el grafo de comunidades con ggraph
 set.seed(2023)
-ggraph(grafo_palabras, layout = "fr") +
+grafico = ggraph(grafo_palabras, layout = "fr") +
   geom_edge_link(aes(edge_alpha = weight), show.legend = FALSE, color = "gray80") +
   geom_node_point(aes(color = comunidad, size = centralidad)) +
   geom_node_text(aes(label = name), repel = TRUE, size = 3, max.overlaps = Inf) +
@@ -443,6 +447,10 @@ ggraph(grafo_palabras, layout = "fr") +
     color = "Comunidad",
     size = "Centralidad"
   )
+```
+
+```{r, echo=FALSE, out.width="60%", fig.align='center'}
+knitr::include_graphics("C://Rondaies_AE_2026//Imagenes//Grafo.png")
 ```
 
 #### Interpretación de la red de similitud y comunidades (Grafo y Centralidad)
@@ -460,24 +468,15 @@ El umbral de similitud 0.4 se utiliza como criterio de poda para conservar únic
 **2. Detección de Comunidades (Algoritmo de Louvain)**
 Al optimizar la modularidad de la red, el algoritmo de Louvain logra aislar clústers semánticos con fronteras mucho más claras que la proyección t-SNE. Observando la topología del grafo, destacan las siguientes subredes:
 
-* **Comunidad 1 (Verde):** .
 
-* **Comunidad 2 (Azul):** .
+* Comunidad 1 (Verde): Agrupa principalmente palabras relacionadas con acciones, desplazamientos y elementos
+físicos del relato. Aparecen términos como “camí”, “cases”, “pedra”, “terra”, “lloc” o “pega”, asociados a escenarios, objetos y situaciones concretas dentro de las rondallas.
 
-* **Comunidad 3 (Rojo):** .
+* Comunidad 2 (Azul): Reúne vocabulario vinculado a interacción, comunicación y elementos del imaginario fantástico y popular. Destacan palabras como “dimoni”, “sant”, “amor”, "vol”, “deu” o “serà”, relacionadas con diálogos, conflictos y componentes religiosos o mágicos frecuentes en los cuentos tradicionales.
 
-* **Comunidad 4 (Lila):** .
+* Comunidad 3 (Rojo): Se sitúa en la región más central del grafo y concentra gran parte del vocabulario estructural y narrativo más frecuente. Aparecen palabras como "homo", "mort", "sempre", "dona".
 
-**2. Análisis de Centralidad (Eigenvector)**
-Para cuantificar la importancia de cada palabra en la red, se ha utilizado la centralidad de vector propio (*Eigenvector centrality*), la cual se obtiene a partir del vector propio dominante de la matriz de adyacencia del grafo. Esta métrica no solo evalúa el número de conexiones de un nodo, sino la calidad de estas (estar conectado a nodos que a su vez son muy influyentes).
-
-Al observar los 10 nodos más centrales de la tabla, extraemos dos conclusiones clave:
-
-* **Nodos conectores (hubs) narrativos:** Las palabras con centralidad cercana o igual a 1 corroboran lo observado en los modelos anteriores. Como pilares de la acción y la descripción temporal, son estadísticamente indispensables para articular la narrativa, conectando todas las comunidades temáticas.
-
-* **Centro de gravedad temático:** Resulta muy revelador que **"rei"** alcance un valor de centralidad tan elevado. Es el primer sustantivo no estructural de la lista, lo que demuestra matemáticamente que la figura del rey actúa como el centro de gravedad argumental alrededor del cual orbitan e interaccionan la mayoría de las rondallas analizadas.
-
-
+* Comunidad 4 (Lila): Agrupa numerosos sustantivos relacionados con personajes y relaciones sociales o familiares. En ella aparecen palabras como “rei”, “reina”, “princesa”, “moro”, “fia”, “mare” o “fia”, asociadas a figuras humanas recurrentes dentro de las rondallas.
 
 
 ### Disclaimer de uso de IA
